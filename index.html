@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ま</title>
 <style>
-  
   html, body {
     margin: 0;
     height: 100%;
@@ -65,24 +64,29 @@ function drawMist() {
 function loop() {
   time += 16;
 
-  // 触っていると沈みやすい
   if (touching) {
-    velocity += 0.02;     // 沈む加速
+    velocity += 0.08;   // 加速を強く
   } else {
-    velocity -= 0.01;     // 浮く方向へ
+    velocity -= 0.03;   // 浮き戻りも少し強く
   }
 
-  // 減衰（揺れ感）
-  velocity *= 0.98;
+  velocity *= 0.97;     // 減衰
 
   offsetY += velocity;
 
-  // 制限（深すぎない）
-  offsetY = Math.max(-100, Math.min(100, offsetY));
+  // 沈み幅を広げる
+  offsetY = Math.max(-300, Math.min(300, offsetY));
 
   ctx.clearRect(0, 0, w, h);
+
+  // 🌊 ここが重要
+  ctx.save();
+  ctx.translate(0, offsetY * 0.5);  // 全体を沈ませる
+
   drawBackground();
   drawMist();
+
+  ctx.restore();
 
   requestAnimationFrame(loop);
 }
