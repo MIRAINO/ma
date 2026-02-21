@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ま</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0a0f1a;
+    overflow: hidden;
+    touch-action: none;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let w, h;
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+let offsetY = 0;          // 沈み量
+let velocity = 0;         // 沈む速度
+let touching = false;
+let time = 0;
+
+canvas.addEventListener('pointerdown', () => touching = true);
+canvas.addEventListener('pointerup', () => touching = false);
+canvas.addEventListener('pointercancel', () => touching = false);
+canvas.addEventListener('pointerleave', () => touching = false);
+
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#05070d");   // 上ほぼ黒
+  grad.addColorStop(1, "#0f1c33");   // 下深紺
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+}
+
+function drawMist() {
+  ctx.fillStyle = "rgba(255,255,255,0.02)";
+  for (let i = 0; i < 40; i++) {
+    const x = (Math.sin(time * 0.0003 + i) * 0.5 + 0.5) * w;
+    const y = ((i / 40) * h + offsetY) % h;
+    ctx.beginPath();
+    ctx.arc(x, y, 80, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function loop() {
+  time += 16;
+
+  // 触っていると沈みやすい
+  if (touching) {
+    velocity += 0.02;     // 沈む加速
+  } else {
+    velocity -= 0.01;     // 浮く方向へ
+  }
+
+  // 減衰（揺れ感）
+  velocity *= 0.98;
+
+  offsetY += velocity;
+
+  // 制限（深すぎない）
+  offsetY = Math.max(-100, Math.min(100, offsetY));
+
+  ctx.clearRect(0, 0, w, h);
+  drawBackground();
+  drawMist();
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
