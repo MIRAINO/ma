@@ -5,16 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ま</title>
 <style>
-  html, body {
-    margin: 0;
-    height: 100%;
-    background: #0a0f1a;
-    overflow: hidden;
-    touch-action: none;
-  }
-  canvas {
-    display: block;
-  }
+  html, body { margin:0; height:100%; background:#0a0f1a; overflow:hidden; touch-action:none; }
+  canvas { display:block; }
 </style>
 </head>
 <body>
@@ -22,75 +14,135 @@
 
 <script>
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
 
-let w, h;
-function resize() {
-  w = canvas.width = window.innerWidth;
-  h = canvas.height = window.innerHeight;
+let w, h, dpr;
+function resize(){
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  w = Math.floor(window.innerWidth);
+  h = Math.floor(window.innerHeight);
+  canvas.width  = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 resize();
 window.addEventListener('resize', resize);
 
-let offsetY = 0;          // 沈み量
-let velocity = 0;         // 沈む速度
-let touching = false;
+// ---- 沈み（目標値方式）
+let offsetY = 0;
+let targetOffset = 0;
+
+// ---- 入力
+let down = false;
+let lastX = 0, lastY = 0;
+let moveEnergy = 0; // なぞりの勢い
 let time = 0;
 
-canvas.addEventListener('pointerdown', () => touching = true);
-canvas.addEventListener('pointerup', () => touching = false);
-canvas.addEventListener('pointercancel', () => touching = false);
-canvas.addEventListener('pointerleave', () => touching = false);
+// pointer captureで取りこぼし防止
+canvas.addEventListener('pointerdown', (e)=>{
+  down = true;
+  canvas.setPointerCapture?.(e.pointerId);
+  lastX = e.clientX; lastY = e.clientY;
+});
 
-function drawBackground() {
+canvas.addEventListener('pointermove', (e)=>{
+  if (!down) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+
+  // なぞりの量を勢いに変換（過敏なら係数を下げる）
+  const dist = Math.hypot(dx, dy);
+  moveEnergy += dist * 0.6; // ←反応の良さ
+});
+
+function endPointer(){
+  down = false;
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', endPointer);
+
+// ---- 背景
+function drawBackground(){
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, "#05070d");   // 上ほぼ黒
-  grad.addColorStop(1, "#0f1c33");   // 下深紺
+  grad.addColorStop(0, "#05070d");
+  grad.addColorStop(1, "#0f1c33");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 }
 
-function drawMist() {
-  ctx.fillStyle = "rgba(255,255,255,0.02)";
-  for (let i = 0; i < 40; i++) {
-    const x = (Math.sin(time * 0.0003 + i) * 0.5 + 0.5) * w;
-    const y = ((i / 40) * h + offsetY) % h;
-    ctx.beginPath();
-    ctx.arc(x, y, 80, 0, Math.PI * 2);
-    ctx.fill();
+// ---- 微細な霧粒子
+const particles = [];
+function initParticles(){
+  particles.length = 0;
+  const n = Math.floor((w*h) / 6000); // 画面に応じて数（細かくしたいなら 6000→4000）
+  for(let i=0;i<n;i++){
+    particles.push({
+      x: Math.random()*w,
+      y: Math.random()*h,
+      r: 1 + Math.random()*2.5,     // 粒のサイズ
+      a: 0.010 + Math.random()*0.02, // 透明度
+      s: 0.15 + Math.random()*0.35,  // 速度
+      p: Math.random()*Math.PI*2     // 位相
+    });
   }
 }
+initParticles();
+window.addEventListener('resize', initParticles);
 
-function loop() {
-  time += 16;
+function drawMist(){
+  // 霧は「乗算っぽい」方が水中感が出るけど、まずは薄く描画
+  for (const pt of particles) {
+    const nx = pt.x + Math.sin(time*0.0004 + pt.p) * 6;
+    const ny = (pt.y + Math.cos(time*0.00035 + pt.p) * 6 + offsetY*0.25) % h;
 
-  if (touching) {
-    velocity += 0.08;   // 加速を強く
-  } else {
-    velocity -= 0.03;   // 浮き戻りも少し強く
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${pt.a})`;
+    ctx.arc(nx, ny, pt.r, 0, Math.PI*2);
+    ctx.fill();
+
+    // ゆっくり漂う
+    pt.y += pt.s;
+    if (pt.y > h + 10) pt.y = -10;
   }
 
-  velocity *= 0.97;     // 減衰
+  // うっすらベール（霧っぽさ足し）
+  ctx.fillStyle = "rgba(255,255,255,0.01)";
+  ctx.fillRect(0,0,w,h);
+}
 
-  offsetY += velocity;
+// ---- ループ（強すぎ問題を解決：targetOffsetへ追従）
+function loop(){
+  time += 16;
 
-  // 沈み幅を広げる
-  offsetY = Math.max(-300, Math.min(300, offsetY));
+  // 押していると「沈みたい」方向へ。なぞりがあるほど少し増える
+  const baseSink = down ? 120 : 0; // ←沈みの強さ（強いなら 120→80）
+  // moveEnergy を沈みに変換（反応良くしたいなら係数上げる/強いなら下げる）
+  const moveSink = Math.min(180, moveEnergy) * 0.6;
 
-  ctx.clearRect(0, 0, w, h);
+  // 目標沈み量
+  targetOffset = baseSink + moveSink;
 
-  // 🌊 ここが重要
+  // 追従（滑らか）
+  const follow = 0.08; // ←反応速度（速い=0.12 遅い=0.05）
+  offsetY += (targetOffset - offsetY) * follow;
+
+  // なぞり勢いは自然に減衰
+  moveEnergy *= 0.92;
+
+  // 描画（全体を少し沈ませる）
+  ctx.clearRect(0,0,w,h);
   ctx.save();
-  ctx.translate(0, offsetY * 0.5);  // 全体を沈ませる
-
+  ctx.translate(0, offsetY * 0.35); // ←沈みの見え方（強いなら 0.35→0.25）
   drawBackground();
   drawMist();
-
   ctx.restore();
 
   requestAnimationFrame(loop);
 }
-
 loop();
 </script>
 </body>
