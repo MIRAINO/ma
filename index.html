@@ -76,13 +76,13 @@ function initParticles(){
   particles.length = 0;
 
   // 粗い粒子にする：数は控えめでも「見える」
-  const n = Math.floor((w*h) / 700); // 少なめ（粗さ）
+  const n = Math.floor((w*h) / 450); // 少なめ（粗さ）
   for(let i=0;i<n;i++){
     particles.push({
       x: Math.random()*w,
       y: Math.random()*h,
       r: 0.3 + Math.random()*0.9,   // 粒を大きく（粗い）
-      a: 0.05 + Math.random()*0.10,  // かなり明るく
+      a: 0.08 + Math.random()*0.12,  // かなり明るく
       s: 0.12 + Math.random()*0.35,   // 漂い
       p: Math.random()*Math.PI*2
     });
@@ -101,7 +101,7 @@ function drawMist(){
     ctx.beginPath();
     // 青白い光粒子
     ctx.fillStyle = `rgba(170,210,255,${pt.a})`;
-    ctx.arc(nx, ny, pt.r, 0, Math.PI*2);
+    ctx.ellipse(nx, ny, pt.r, pt.r*1.8, 0, 0, Math.PI*2);
     ctx.fill();
 
     pt.y += pt.s;
