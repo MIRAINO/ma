@@ -45,8 +45,33 @@ canvas.addEventListener('pointermove', (e)=>{
   touchY = e.clientY;
 });
 function endPointer(){
+  // 離した瞬間に“散る”パルス
+  if (touchActive) burstOut(touchX, touchY);
   touchActive = false;
 }
+
+function burstOut(cx, cy){
+  const R = 220;       // 影響半径
+  const R2 = R*R;
+  const power = 1.2;   // 拡散の強さ（強すぎたら 0.7）
+
+  for(const pt of particles){
+    const dx = pt.x - cx;
+    const dy = pt.y - cy;
+    const d2 = dx*dx + dy*dy;
+    if (d2 > R2) continue;
+
+    const d = Math.sqrt(d2) + 0.0001;
+    const falloff = 1 - (d / R);          // 近いほど強い
+    const ux = dx / d;
+    const uy = dy / d;
+
+    // 外向きに速度を足す
+    pt.vx += ux * power * falloff;
+    pt.vy += uy * power * falloff;
+  }
+}
+
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', endPointer);
@@ -74,16 +99,18 @@ function initParticles(){
   const n = Math.floor((w*h) / 350); // 密度（今の設定）
 
   for(let i=0;i<n;i++){
-    particles.push({
-      x: Math.random()*w,
-      y: Math.random()*h,
-      r: 0.3 + Math.random()*0.9,
-      a: 0.08 + Math.random()*0.12,
-      s: 0.12 + Math.random()*0.35,
-      p: Math.random()*Math.PI*2,
-      vx: (Math.random()-0.5) * 0.2,
-      vy: (Math.random()-0.5) * 0.2
-    });
+    const x = Math.random()*w;
+const y = Math.random()*h;
+particles.push({
+  x, y,
+  hx: x, hy: y,
+  r: 0.3 + Math.random()*0.9,
+  a: 0.08 + Math.random()*0.12,
+  s: 0.12 + Math.random()*0.35,
+  p: Math.random()*Math.PI*2,
+  vx: (Math.random()-0.5) * 0.2,
+  vy: (Math.random()-0.5) * 0.2
+});
   }
 }
 initParticles();
