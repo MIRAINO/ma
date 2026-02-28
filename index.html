@@ -120,8 +120,8 @@ window.addEventListener('resize', () => {
 
 // ---- 吸い寄せパラメータ
 const ATTR = {
-  R: 220,
-  strength: 0.035,
+  R: 140,          // 220→140（範囲を狭く）
+  strength: 0.028, // 0.035→0.028（強すぎを緩和）
   damping: 0.95,
   drift: 0.08,
   springTouch: 0.0003,
@@ -147,7 +147,8 @@ function updateAndDrawMist(){
 
       if (dist2 < R2) {
         const dist = Math.sqrt(dist2) + 0.0001;
-        const falloff = 1 - (dist / R);
+        let falloff = 1 - (dist / R);
+falloff = falloff * falloff; // 中心だけ強く（狭く感じる）
         const ux = dx / dist;
         const uy = dy / dist;
 
@@ -203,14 +204,13 @@ function updateAndDrawMist(){
 
   ctx.globalCompositeOperation = "source-over";
 
-  // 薄い霧ベール
-  ctx.fillStyle = "rgba(255,255,255,0.006)";
-  ctx.fillRect(0, 0, w, h);
-}
+  
 
 // ---- ループ
 function loop(){
   time += 16;
+  // 念のため毎フレーム transform をリセット（Safari対策）
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // 7秒 down / 4秒 up
   const cycle = 11000;
@@ -230,6 +230,8 @@ function loop(){
   const follow = 0.12;
   offsetY += (targetOffset - offsetY) * follow;
 
+  ctx.clearRect(0, 0, w, h);
+
   // 背景は固定で毎フレーム塗る（これで上部が薄くなる問題が消える）
   drawBackground();
 
@@ -243,6 +245,10 @@ function loop(){
   ctx.translate(sway, offsetY * 0.30);
   updateAndDrawMist();
   ctx.restore();
+
+  // ベールは固定（translateの外）
+ctx.fillStyle = "rgba(255,255,255,0.006)";
+ctx.fillRect(0, 0, w, h);
 
   requestAnimationFrame(loop);
 }
