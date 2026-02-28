@@ -43,7 +43,10 @@ canvas.addEventListener('pointermove', e=>{
   touchX = e.clientX;
   touchY = e.clientY;
 });
-canvas.addEventListener('pointerup', ()=> touchActive=false);
+canvas.addEventListener('pointerup', ()=>{
+  if(touchActive) burstOut(touchX, touchY);
+  touchActive = false;
+});
 canvas.addEventListener('pointercancel', ()=> touchActive=false);
 canvas.addEventListener('pointerleave', ()=> touchActive=false);
 
@@ -57,6 +60,22 @@ function drawBackground(){
   ctx.fillStyle = grad;
   ctx.fillRect(0,0,w,h);
 }
+
+// 呼吸：7秒 down / 4秒 up
+const cycle = 11000;
+const downTime = 7000;
+const t = performance.now() % cycle;
+
+let p;
+if (t < downTime) p = t / downTime;
+else p = 1 - ((t - downTime) / (cycle - downTime));
+
+// なめらか（加減速）
+p = p * p * (3 - 2 * p);
+
+// 深さ（好み）
+const maxDepth = 150;
+offsetY = p * maxDepth;
 
 const particles = [];
 function initParticles(){
@@ -77,6 +96,8 @@ function initParticles(){
   }
 }
 initParticles();
+
+
 
 function updateParticles(){
   const R = 140;
@@ -113,15 +134,49 @@ function updateParticles(){
 function drawParticles(){
   ctx.globalCompositeOperation="screen";
   for(const pt of particles){
-    const nx = pt.x + Math.sin(time*0.00035+pt.p)*6;
-    const ny = pt.y + Math.cos(time*0.00030+pt.p)*6;
+  const nx = pt.x + Math.sin(time*0.00035+pt.p)*6;
+  const ny = pt.y + Math.cos(time*0.00030+pt.p)*6;
 
-    ctx.beginPath();
-    ctx.fillStyle=`rgba(170,210,255,${pt.a})`;
-    ctx.ellipse(nx,ny,pt.r,pt.r*1.8,0,0,Math.PI*2);
-    ctx.fill();
+  // 密度ブースト（触ってる時だけ）
+  let boost = 0;
+  if (touchActive) {
+    const dx = touchX - pt.x;
+    const dy = touchY - pt.y;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    const Rb = 130;
+    if (d < Rb) boost = 1 - (d / Rb);
   }
+
+  const a = Math.min(0.45, pt.a + boost * 0.28);
+  const r = pt.r * (1 + boost * 0.45);
+
+  ctx.beginPath();
+  ctx.fillStyle=`rgba(170,210,255,${a})`;
+  ctx.ellipse(nx,ny,r,r*1.8,0,0,Math.PI*2);
+  ctx.fill();
+}
   ctx.globalCompositeOperation="source-over";
+}
+
+function burstOut(cx, cy){
+  const R = 180;
+  const R2 = R*R;
+  const power = 1.0;
+
+  for(const pt of particles){
+    const dx = pt.x - cx;
+    const dy = pt.y - cy;
+    const d2 = dx*dx + dy*dy;
+    if(d2 > R2) continue;
+
+    const d = Math.sqrt(d2) + 0.0001;
+    const falloff = 1 - (d / R);
+    const ux = dx / d;
+    const uy = dy / d;
+
+    pt.vx += ux * power * falloff;
+    pt.vy += uy * power * falloff;
+  }
 }
 
 function loop(){
@@ -136,7 +191,7 @@ function loop(){
     Math.sin(time*0.0013)*2;
 
   ctx.save();
-  ctx.translate(sway, offsetY*0.3);
+  ctx.translate(sway, offsetY * 0.30);
   updateParticles();
   drawParticles();
   ctx.restore();
