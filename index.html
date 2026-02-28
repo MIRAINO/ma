@@ -28,8 +28,9 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 resize();
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); initParticles(); });
 
+// ---- タッチ
 let touchActive = false;
 let touchX = 0, touchY = 0;
 
@@ -50,9 +51,11 @@ canvas.addEventListener('pointerup', ()=>{
 canvas.addEventListener('pointercancel', ()=> touchActive=false);
 canvas.addEventListener('pointerleave', ()=> touchActive=false);
 
+// ---- 状態
 let offsetY = 0;
 let time = 0;
 
+// ---- 背景（固定）
 function drawBackground(){
   const grad = ctx.createLinearGradient(0,0,0,h);
   grad.addColorStop(0,"#04060c");
@@ -61,22 +64,7 @@ function drawBackground(){
   ctx.fillRect(0,0,w,h);
 }
 
-// 呼吸：7秒 down / 4秒 up
-const cycle = 11000;
-const downTime = 7000;
-const t = performance.now() % cycle;
-
-let p;
-if (t < downTime) p = t / downTime;
-else p = 1 - ((t - downTime) / (cycle - downTime));
-
-// なめらか（加減速）
-p = p * p * (3 - 2 * p);
-
-// 深さ（好み）
-const maxDepth = 150;
-offsetY = p * maxDepth;
-
+// ---- 粒子
 const particles = [];
 function initParticles(){
   particles.length = 0;
@@ -97,8 +85,6 @@ function initParticles(){
 }
 initParticles();
 
-
-
 function updateParticles(){
   const R = 140;
   const R2 = R*R;
@@ -114,7 +100,7 @@ function updateParticles(){
       if(d2<R2){
         const d = Math.sqrt(d2)+0.0001;
         let falloff = 1-(d/R);
-        falloff *= falloff;
+        falloff *= falloff; // 中心だけ強く
         pt.vx += (dx/d)*strength*falloff;
         pt.vy += (dy/d)*strength*falloff;
       }
@@ -123,38 +109,46 @@ function updateParticles(){
     pt.vx*=damping;
     pt.vy*=damping;
 
-    pt.vx += (pt.hx-pt.x)*0.0005;
-    pt.vy += (pt.hy-pt.y)*0.0005;
+    // ホームへ戻る（溜まりっぱなし防止）
+    const spring = touchActive ? 0.0002 : 0.0008;
+    pt.vx += (pt.hx-pt.x)*spring;
+    pt.vy += (pt.hy-pt.y)*spring;
 
     pt.x+=pt.vx;
     pt.y+=pt.vy;
+
+    // 画面外に出たら戻す（軽いラップ）
+    if (pt.x < -20) pt.x = w + 20;
+    if (pt.x > w + 20) pt.x = -20;
+    if (pt.y < -20) pt.y = h + 20;
+    if (pt.y > h + 20) pt.y = -20;
   }
 }
 
 function drawParticles(){
   ctx.globalCompositeOperation="screen";
   for(const pt of particles){
-  const nx = pt.x + Math.sin(time*0.00035+pt.p)*6;
-  const ny = pt.y + Math.cos(time*0.00030+pt.p)*6;
+    const nx = pt.x + Math.sin(time*0.00035+pt.p)*6;
+    const ny = pt.y + Math.cos(time*0.00030+pt.p)*6;
 
-  // 密度ブースト（触ってる時だけ）
-  let boost = 0;
-  if (touchActive) {
-    const dx = touchX - pt.x;
-    const dy = touchY - pt.y;
-    const d = Math.sqrt(dx*dx + dy*dy);
-    const Rb = 130;
-    if (d < Rb) boost = 1 - (d / Rb);
+    // 密度ブースト（触ってる時だけ）
+    let boost = 0;
+    if (touchActive) {
+      const dx = touchX - pt.x;
+      const dy = touchY - pt.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      const Rb = 130;
+      if (d < Rb) boost = 1 - (d / Rb);
+    }
+
+    const a = Math.min(0.45, pt.a + boost * 0.28);
+    const r = pt.r * (1 + boost * 0.45);
+
+    ctx.beginPath();
+    ctx.fillStyle=`rgba(170,210,255,${a})`;
+    ctx.ellipse(nx,ny,r,r*1.8,0,0,Math.PI*2);
+    ctx.fill();
   }
-
-  const a = Math.min(0.45, pt.a + boost * 0.28);
-  const r = pt.r * (1 + boost * 0.45);
-
-  ctx.beginPath();
-  ctx.fillStyle=`rgba(170,210,255,${a})`;
-  ctx.ellipse(nx,ny,r,r*1.8,0,0,Math.PI*2);
-  ctx.fill();
-}
   ctx.globalCompositeOperation="source-over";
 }
 
@@ -179,34 +173,15 @@ function burstOut(cx, cy){
   }
 }
 
-function loop(){
-  time+=16;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,w,h);
-
-  drawBackground();
-
-  const sway =
-    Math.sin(time*0.0007)*4+
-    Math.sin(time*0.0013)*2;
-
-  ctx.save();
-  ctx.translate(sway, offsetY * 0.30);
-  updateParticles();
-  drawParticles();
-  ctx.restore();
-
-  requestAnimationFrame(loop);
-}
+// ---- ループ（※1個だけ）
 function loop(){
   time += 16;
 
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
-
   drawBackground();
 
-  // --- 呼吸
+  // 呼吸：7秒 down / 4秒 up（毎フレーム計算する）
   const cycle = 11000;
   const downTime = 7000;
   const t = performance.now() % cycle;
@@ -215,24 +190,27 @@ function loop(){
   if (t < downTime) p = t / downTime;
   else p = 1 - ((t - downTime) / (cycle - downTime));
 
+  // なめらか
   p = p * p * (3 - 2 * p);
 
-  const maxDepth = 200; // ← 一旦大きめにして確認
+  const maxDepth = 200; // 確認用（落ち着いたら150に戻す）
   offsetY = p * maxDepth;
 
-  // --- 横揺れ
+  // 横揺れ
   const sway =
     Math.sin(time*0.0007)*6 +
     Math.sin(time*0.0013)*2;
 
   ctx.save();
-  ctx.translate(sway, offsetY * 0.4); // ← 0.4で強め確認
+  ctx.translate(sway, offsetY * 0.4); // 確認用（落ち着いたら0.30へ）
   updateParticles();
   drawParticles();
   ctx.restore();
 
   requestAnimationFrame(loop);
 }
+
+loop(); // ←★これが必要
 </script>
 </body>
 </html>
