@@ -191,7 +191,7 @@ if (touchActive) {
 }
 
 // “密度が上がる”＝明るさとサイズを少し上げる（やりすぎ注意）
-const a = Math.min(0.35, pt.a + boost * 0.20);
+const a = Math.min(0.35, pt.a + boost * 0.12);
 const r = pt.r * (1 + boost * 0.35);
 
     ctx.fillStyle = `rgba(170,210,255,${a})`;
