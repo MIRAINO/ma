@@ -157,6 +157,11 @@ function updateAndDrawMist(){
     pt.vx *= damping;
     pt.vy *= damping;
 
+    // --- ホームへ戻る弱いバネ（常に効かせると自然に散る）
+const spring = touchActive ? 0.002 : 0.006; // 触ってる時は弱く、離したら強め
+pt.vx += (pt.hx - pt.x) * spring;
+pt.vy += (pt.hy - pt.y) * spring;
+
     // --- 位置更新
     pt.x += pt.vx;
     pt.y += pt.vy;
@@ -175,8 +180,22 @@ function updateAndDrawMist(){
     const ny = pt.y + Math.cos(time*0.00030 + pt.p) * 6;
 
     ctx.beginPath();
-    ctx.fillStyle = `rgba(170,210,255,${pt.a})`;
-    ctx.ellipse(nx, ny, pt.r, pt.r*1.8, 0, 0, Math.PI*2);
+
+    let boost = 0;
+if (touchActive) {
+  const dx = touchX - pt.x;
+  const dy = touchY - pt.y;
+  const d = Math.sqrt(dx*dx + dy*dy);
+  const Rb = 180; // 密度表現の半径
+  if (d < Rb) boost = 1 - (d / Rb); // 0..1
+}
+
+// “密度が上がる”＝明るさとサイズを少し上げる（やりすぎ注意）
+const a = Math.min(0.35, pt.a + boost * 0.20);
+const r = pt.r * (1 + boost * 0.35);
+
+    ctx.fillStyle = `rgba(170,210,255,${a})`;
+ctx.ellipse(nx, ny, r, r*1.8, 0, 0, Math.PI*2);
     ctx.fill();
   }
 
