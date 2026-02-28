@@ -76,7 +76,7 @@ function initParticles(){
   particles.length = 0;
 
   // 粗い粒子にする：数は控えめでも「見える」
-  const n = Math.floor((w*h) / 450); // 少なめ（粗さ）
+  const n = Math.floor((w*h) / 350); // 少なめ（粗さ）
   for(let i=0;i<n;i++){
     particles.push({
       x: Math.random()*w,
@@ -120,8 +120,8 @@ function drawMist(){
 function loop(){
   time += 16;
 
-// ---- 自動呼吸サイクル（7秒 down / 4秒 up）
-const cycle = 11000;     // 11秒で1周
+// ---- 自動呼吸サイクル（7秒 down / 5秒 up）
+const cycle = 12000;     // 12秒で1周
 const downTime = 7000;   // 7秒で沈む
 const t = performance.now() % cycle;
 
