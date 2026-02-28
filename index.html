@@ -150,7 +150,12 @@ targetOffset = p * maxDepth + touchBoost;
   ctx.clearRect(0,0,w,h);
 
   ctx.save();
-  ctx.translate(0, offsetY * 0.30); // 沈み演出
+  // 横のゆらぎ（ゆっくり）
+const sway =
+  Math.sin(time * 0.0007) * 6 +     // 大きめのゆらぎ
+  Math.sin(time * 0.0013) * 2;      // 細かいゆらぎ
+
+ctx.translate(sway, offsetY * 0.30);
   drawBackground();
   drawMist();
   ctx.restore();
