@@ -28,18 +28,8 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 resize();
-window.addEventListener('resize', () => { resize(); initParticles(); });
 
-// ---- 沈み（目標値方式）
-let offsetY = 0;
-let targetOffset = 0;
-
-// ---- 入力
-let down = false;
-let lastX = 0, lastY = 0;
-
-let time = 0;
-
+// ---- タッチ（粒子を引き寄せ）
 let touchActive = false;
 let touchX = 0, touchY = 0;
 
@@ -49,13 +39,11 @@ canvas.addEventListener('pointerdown', (e)=>{
   touchX = e.clientX;
   touchY = e.clientY;
 });
-
 canvas.addEventListener('pointermove', (e)=>{
   if (!touchActive) return;
   touchX = e.clientX;
   touchY = e.clientY;
 });
-
 function endPointer(){
   touchActive = false;
 }
@@ -63,113 +51,111 @@ canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', endPointer);
 
-function endPointer(){ down = false; }
-canvas.addEventListener('pointerup', endPointer);
-canvas.addEventListener('pointercancel', endPointer);
-canvas.addEventListener('pointerleave', endPointer);
+// ---- 沈み（呼吸）
+let offsetY = 0;
+let targetOffset = 0;
 
-
+// ---- 時間
+let time = 0;
 
 // ---- 背景（夜の水中）
 function drawBackground(){
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, "#04060c");  // ほぼ黒
-  grad.addColorStop(1, "#0b1730");  // 深い紺
+  grad.addColorStop(0, "#04060c");
+  grad.addColorStop(1, "#0b1730");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 }
 
-// ---- 粒子（粗く・明るく）
+// ---- 粒子
 const particles = [];
 function initParticles(){
   particles.length = 0;
+  const n = Math.floor((w*h) / 350); // 密度（今の設定）
 
-  // 粗い粒子にする：数は控えめでも「見える」
-  const n = Math.floor((w*h) / 350); // 少なめ（粗さ）
   for(let i=0;i<n;i++){
     particles.push({
       x: Math.random()*w,
       y: Math.random()*h,
-      r: 0.3 + Math.random()*0.9,   // 粒を大きく（粗い）
-      a: 0.08 + Math.random()*0.12,  // かなり明るく
-      s: 0.12 + Math.random()*0.35,   // 漂い
-      p: Math.random()*Math.PI*2
+      r: 0.3 + Math.random()*0.9,
+      a: 0.08 + Math.random()*0.12,
+      s: 0.12 + Math.random()*0.35,
+      p: Math.random()*Math.PI*2,
       vx: (Math.random()-0.5) * 0.2,
-      vy: (Math.random()-0.5) * 0.2,
-      
+      vy: (Math.random()-0.5) * 0.2
     });
   }
 }
 initParticles();
 
-function drawMist(){
-  // 光る描画（重なるほど明るい）
+window.addEventListener('resize', () => { resize(); initParticles(); });
+
+// ---- 吸い寄せパラメータ（粒子ループ外で一回だけ）
+const ATTR = {
+  R: 160,
+  strength: 0.020,
+  damping: 0.92,
+  drift: 0.10 // 水中の自然漂い（強すぎたら 0.05）
+};
+
+function updateAndDrawMist(){
   ctx.globalCompositeOperation = "screen";
+
+  const R = ATTR.R;
+  const R2 = R*R;
+  const strength = ATTR.strength;
+  const damping = ATTR.damping;
+  const drift = ATTR.drift;
 
   for (const pt of particles) {
 
-    // ---- 指への吸い寄せパラメータ
-const R = 160;           // 影響半径（px）
-const R2 = R * R;
-const strength = 0.020;  // 引力の強さ（強すぎたら 0.012 くらいへ）
-const damping = 0.92;    // 減衰（0.88〜0.96で調整）
+    // --- 指へ吸い寄せ
+    if (touchActive) {
+      const dx = touchX - pt.x;
+      const dy = touchY - pt.y;
+      const dist2 = dx*dx + dy*dy;
 
-// 粒子の更新（吸い寄せ）
-if (touchActive) {
-  const dx = touchX - pt.x;
-  const dy = touchY - pt.y;
-  const dist2 = dx*dx + dy*dy;
+      if (dist2 < R2) {
+        const dist = Math.sqrt(dist2) + 0.0001;
+        const falloff = 1 - (dist / R);   // 0..1
+        const ux = dx / dist;
+        const uy = dy / dist;
 
-  if (dist2 < R2) {
-    const dist = Math.sqrt(dist2) + 0.0001;
+        pt.vx += ux * strength * falloff;
+        pt.vy += uy * strength * falloff;
+      }
+    }
 
-    // 距離減衰（近いほど強い、遠いほど弱い）
-    const falloff = 1 - (dist / R);
+    // --- 減衰
+    pt.vx *= damping;
+    pt.vy *= damping;
 
-    // 正規化ベクトル（方向だけ）
-    const ux = dx / dist;
-    const uy = dy / dist;
+    // --- 位置更新
+    pt.x += pt.vx;
+    pt.y += pt.vy;
 
-    // 引力（指へ寄る）
-    pt.vx += ux * strength * falloff;
-    pt.vy += uy * strength * falloff;
-  }
-}
+    // --- ほんの少し自然漂い（縦方向）
+    pt.y += pt.s * drift;
 
-// 減衰（暴れ防止）
-pt.vx *= damping;
-pt.vy *= damping;
+    // --- 画面外ラップ
+    if (pt.x < -20) pt.x = w + 20;
+    if (pt.x > w + 20) pt.x = -20;
+    if (pt.y < -20) pt.y = h + 20;
+    if (pt.y > h + 20) pt.y = -20;
 
-// 位置更新
-pt.x += pt.vx;
-pt.y += pt.vy;
-
-// 既存の漂いも少しだけ残す（縦方向の水中感）
-pt.y += pt.s * 0.15;
-
-// 画面外に出たらラップ（反対側へ回す）
-if (pt.x < -20) pt.x = w + 20;
-if (pt.x > w + 20) pt.x = -20;
-if (pt.y < -20) pt.y = h + 20;
-if (pt.y > h + 20) pt.y = -20;
-
+    // --- 見た目ゆらぎ（微細）
     const nx = pt.x + Math.sin(time*0.00035 + pt.p) * 6;
     const ny = pt.y + Math.cos(time*0.00030 + pt.p) * 6;
 
     ctx.beginPath();
-    // 青白い光粒子
     ctx.fillStyle = `rgba(170,210,255,${pt.a})`;
     ctx.ellipse(nx, ny, pt.r, pt.r*1.8, 0, 0, Math.PI*2);
     ctx.fill();
-
-    pt.y += pt.s;
-    if (pt.y > h + 20) pt.y = -20;
   }
 
-  // 合成を戻す
   ctx.globalCompositeOperation = "source-over";
 
-  // 薄い霧ベール（濃すぎると粒子が死ぬ）
+  // 薄い霧ベール
   ctx.fillStyle = "rgba(255,255,255,0.006)";
   ctx.fillRect(0, 0, w, h);
 }
@@ -178,44 +164,42 @@ if (pt.y > h + 20) pt.y = -20;
 function loop(){
   time += 16;
 
-// ---- 自動呼吸サイクル（7秒 down / 4秒 up）
-const cycle = 11000;     // 11秒で1周
-const downTime = 7000;   // 7秒で沈む
-const t = performance.now() % cycle;
+  // ---- 自動呼吸サイクル（7秒 down / 4秒 up）
+  const cycle = 11000;
+  const downTime = 7000;
+  const t = performance.now() % cycle;
 
-let p;
-if (t < downTime) {
-  p = t / downTime; // 0→1
-} else {
-  p = 1 - ((t - downTime) / (cycle - downTime)); // 1→0
-}
+  let p;
+  if (t < downTime) {
+    p = t / downTime; // 0→1
+  } else {
+    p = 1 - ((t - downTime) / (cycle - downTime)); // 1→0
+  }
 
-// なめらかに（加減速）
-p = p * p * (3 - 2 * p);
+  // なめらか
+  p = p * p * (3 - 2 * p);
 
-// 最大沈み（好み）
-const maxDepth = 150; // 少し深くしても気持ちいい
+  const maxDepth = 150;
+  targetOffset = p * maxDepth;
 
-
-targetOffset = p * maxDepth; // ←これだけ
-
-  // 追従（反応を気持ちよく）
+  // 追従
   const follow = 0.12;
   offsetY += (targetOffset - offsetY) * follow;
-
-  moveEnergy *= 0.90;
 
   ctx.clearRect(0,0,w,h);
 
   ctx.save();
-  // 横のゆらぎ（ゆっくり）
-const sway =
-  Math.sin(time * 0.0007) * (4 + p * 4);     // 大きめのゆらぎ
-  Math.sin(time * 0.0013) * 2;      // 細かいゆらぎ
 
-ctx.translate(sway, offsetY * 0.30);
+  // 横揺れ（足し算を忘れない）
+  const sway =
+    Math.sin(time * 0.0007) * (4 + p * 4) +
+    Math.sin(time * 0.0013) * 2;
+
+  ctx.translate(sway, offsetY * 0.30);
+
   drawBackground();
-  drawMist();
+  updateAndDrawMist();
+
   ctx.restore();
 
   requestAnimationFrame(loop);
