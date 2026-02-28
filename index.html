@@ -152,7 +152,7 @@ targetOffset = p * maxDepth + touchBoost;
   ctx.save();
   // 横のゆらぎ（ゆっくり）
 const sway =
-  Math.sin(time * 0.0007) * 6 +     // 大きめのゆらぎ
+  Math.sin(time * 0.0007) * (4 + p * 4);     // 大きめのゆらぎ
   Math.sin(time * 0.0013) * 2;      // 細かいゆらぎ
 
 ctx.translate(sway, offsetY * 0.30);
