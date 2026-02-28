@@ -119,10 +119,10 @@ window.addEventListener('resize', () => { resize(); initParticles(); });
 
 // ---- 吸い寄せパラメータ（粒子ループ外で一回だけ）
 const ATTR = {
-  R: 200,
-  strength: 0.016,
-  damping: 0.92,
-  drift: 0.10 // 水中の自然漂い（強すぎたら 0.05）
+  R: 220,          // 160→220（影響範囲）
+  strength: 0.035, // 0.020→0.035（吸引）
+  damping: 0.95,   // 0.92→0.95（減衰。高いほど慣性が残る）
+  drift: 0.08
 };
 
 function updateAndDrawMist(){
@@ -158,7 +158,7 @@ function updateAndDrawMist(){
     pt.vy *= damping;
 
     // --- ホームへ戻る弱いバネ（常に効かせると自然に散る）
-const spring = touchActive ? 0.002 : 0.006; // 触ってる時は弱く、離したら強め
+const spring = touchActive ? 0.0003 : 0.006;  // 触ってる時は極小、離したら戻す
 pt.vx += (pt.hx - pt.x) * spring;
 pt.vy += (pt.hy - pt.y) * spring;
 
@@ -191,8 +191,8 @@ if (touchActive) {
 }
 
 // “密度が上がる”＝明るさとサイズを少し上げる（やりすぎ注意）
-const a = Math.min(0.35, pt.a + boost * 0.12);
-const r = pt.r * (1 + boost * 0.35);
+const a = Math.min(0.45, pt.a + boost * 0.28);
+const r = pt.r * (1 + boost * 0.45);
 
     ctx.fillStyle = `rgba(170,210,255,${a})`;
 ctx.ellipse(nx, ny, r, r*1.8, 0, 0, Math.PI*2);
@@ -232,21 +232,13 @@ function loop(){
   const follow = 0.12;
   offsetY += (targetOffset - offsetY) * follow;
 
-  ctx.clearRect(0,0,w,h);
+  
 
-  ctx.save();
-
-  // 横揺れ（足し算を忘れない）
-  const sway =
-    Math.sin(time * 0.0007) * (4 + p * 4) +
-    Math.sin(time * 0.0013) * 2;
-
-  ctx.translate(sway, offsetY * 0.30);
-
-  drawBackground();
-  updateAndDrawMist();
-
-  ctx.restore();
+// 粒子だけ沈む＆揺れる
+ctx.save();
+ctx.translate(sway, offsetY * 0.30);
+updateAndDrawMist();
+ctx.restore();
 
   requestAnimationFrame(loop);
 }
