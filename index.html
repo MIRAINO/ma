@@ -76,7 +76,7 @@ function initParticles(){
   particles.length = 0;
 
   // 粗い粒子にする：数は控えめでも「見える」
-  const n = Math.floor((w*h) / 350); // 少なめ（粗さ）
+  const n = Math.floor((w*h) / 450); // 少なめ（粗さ）
   for(let i=0;i<n;i++){
     particles.push({
       x: Math.random()*w,
@@ -120,11 +120,26 @@ function drawMist(){
 function loop(){
   time += 16;
 
-  // 押してる＋なぞりで沈む（控えめに）
-  const baseSink = down ? 90 : 0;
-  const moveSink = Math.min(300, moveEnergy) * 0.55;
+// ---- 自動呼吸サイクル（6秒 down / 3秒 up）
+const cycle = 9000;      // 9秒で1周
+const downTime = 6000;   // 6秒で沈む
+const t = performance.now() % cycle;
 
-  targetOffset = baseSink + moveSink;
+let p;
+if (t < downTime) {
+  p = t / downTime; // 0→1
+} else {
+  p = 1 - ((t - downTime) / (cycle - downTime)); // 1→0
+}
+
+// なめらかに（加減速）
+p = p * p * (3 - 2 * p);
+
+// 最大沈み（好み）
+const maxDepth = 140;
+
+const touchBoost = (down ? 40 : 0) + Math.min(160, moveEnergy) * 0.25;
+targetOffset = p * maxDepth + touchBoost;
 
   // 追従（反応を気持ちよく）
   const follow = 0.12;
