@@ -120,9 +120,9 @@ function drawMist(){
 function loop(){
   time += 16;
 
-// ---- 自動呼吸サイクル（6秒 down / 3秒 up）
-const cycle = 9000;      // 9秒で1周
-const downTime = 6000;   // 6秒で沈む
+// ---- 自動呼吸サイクル（7秒 down / 4秒 up）
+const cycle = 11000;     // 11秒で1周
+const downTime = 7000;   // 7秒で沈む
 const t = performance.now() % cycle;
 
 let p;
@@ -136,7 +136,7 @@ if (t < downTime) {
 p = p * p * (3 - 2 * p);
 
 // 最大沈み（好み）
-const maxDepth = 140;
+const maxDepth = 150; // 少し深くしても気持ちいい
 
 const touchBoost = (down ? 40 : 0) + Math.min(160, moveEnergy) * 0.25;
 targetOffset = p * maxDepth + touchBoost;
