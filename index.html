@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ま</title>
 <style>
-  html, body { margin:0; height:100%; background:#0a0f1a; overflow:hidden; touch-action:none; }
+  html, body { margin:0; height:100%; background:#060a14; overflow:hidden; touch-action:none; }
   canvas { display:block; }
 </style>
 </head>
@@ -28,7 +28,7 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 resize();
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); initParticles(); });
 
 // ---- 沈み（目標値方式）
 let offsetY = 0;
@@ -37,10 +37,9 @@ let targetOffset = 0;
 // ---- 入力
 let down = false;
 let lastX = 0, lastY = 0;
-let moveEnergy = 0; // なぞりの勢い
+let moveEnergy = 0;
 let time = 0;
 
-// pointer captureで取りこぼし防止
 canvas.addEventListener('pointerdown', (e)=>{
   down = true;
   canvas.setPointerCapture?.(e.pointerId);
@@ -53,100 +52,90 @@ canvas.addEventListener('pointermove', (e)=>{
   const dy = e.clientY - lastY;
   lastX = e.clientX; lastY = e.clientY;
 
-  // なぞりの量を勢いに変換（過敏なら係数を下げる）
-  const moveSink = Math.min(260, moveEnergy) * 0.9; // 180*0.6 → 上限と係数UP
   const dist = Math.hypot(dx, dy);
-moveEnergy += dist * 1.6;
+  moveEnergy += dist * 2.2; // ← なぞりの効き（強め）
 });
 
-function endPointer(){
-  down = false;
-}
+function endPointer(){ down = false; }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', endPointer);
 
-// ---- 背景
-function initParticles(){
-  particles.length = 0;
-  const n = Math.floor((w*h) / 2500); // 粒子増
-  for(let i=0;i<n;i++){
-    particles.push({
-      x: Math.random()*w,
-      y: Math.random()*h,
-      r: 0.8 + Math.random()*1.6,      // 微粒
-      a: 0.03 + Math.random()*0.06,     // 明るく
-      s: 0.10 + Math.random()*0.30,     // 漂いをゆっくり
-      p: Math.random()*Math.PI*2
-    });
-  }
+// ---- 背景（夜の水中）
+function drawBackground(){
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#04060c");  // ほぼ黒
+  grad.addColorStop(1, "#0b1730");  // 深い紺
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
 }
 
-// ---- 微細な霧粒子
+// ---- 粒子（粗く・明るく）
 const particles = [];
 function initParticles(){
   particles.length = 0;
-  const n = Math.floor((w*h) / 2500); // 粒子増
+
+  // 粗い粒子にする：数は控えめでも「見える」
+  const n = Math.floor((w*h) / 9000); // 少なめ（粗さ）
   for(let i=0;i<n;i++){
     particles.push({
       x: Math.random()*w,
       y: Math.random()*h,
-      r: 0.8 + Math.random()*1.6,      // 微粒
-      a: 0.03 + Math.random()*0.06,     // 明るく
-      s: 0.10 + Math.random()*0.30,     // 漂いをゆっくり
+      r: 2.0 + Math.random()*4.5,     // 粒を大きく（粗い）
+      a: 0.18 + Math.random()*0.22,   // かなり明るく
+      s: 0.12 + Math.random()*0.35,   // 漂い
       p: Math.random()*Math.PI*2
     });
   }
 }
-
 initParticles();
-window.addEventListener('resize', initParticles);
 
 function drawMist(){
-  // 霧は「乗算っぽい」方が水中感が出るけど、まずは薄く描画
+  // 光る描画（重なるほど明るい）
+  ctx.globalCompositeOperation = "lighter";
+
   for (const pt of particles) {
-    const nx = pt.x + Math.sin(time*0.0004 + pt.p) * 6;
-    const ny = (pt.y + Math.cos(time*0.00035 + pt.p) * 6 + offsetY*0.25) % h;
+    const nx = pt.x + Math.sin(time*0.00035 + pt.p) * 10;
+    const ny = (pt.y + Math.cos(time*0.00030 + pt.p) * 10 + offsetY*0.25) % h;
 
     ctx.beginPath();
-    ctx.fillStyle = `rgba(255,255,255,${pt.a})`;
+    // 青白い光粒子
+    ctx.fillStyle = `rgba(180,210,255,${pt.a})`;
     ctx.arc(nx, ny, pt.r, 0, Math.PI*2);
     ctx.fill();
 
-    // ゆっくり漂う
     pt.y += pt.s;
-    if (pt.y > h + 10) pt.y = -10;
+    if (pt.y > h + 20) pt.y = -20;
   }
 
-  // 最後のベール
-ctx.fillStyle = "rgba(255,255,255,0.03)";
-ctx.fillRect(0,0,w,h);
+  // 合成を戻す
+  ctx.globalCompositeOperation = "source-over";
+
+  // 薄い霧ベール（濃すぎると粒子が死ぬ）
+  ctx.fillStyle = "rgba(255,255,255,0.006)";
+  ctx.fillRect(0, 0, w, h);
 }
 
-// ---- ループ（強すぎ問題を解決：targetOffsetへ追従）
+// ---- ループ
 function loop(){
   time += 16;
 
-  // 押していると「沈みたい」方向へ。なぞりがあるほど少し増える
-  const baseSink = down ? 120 : 0; // ←沈みの強さ（強いなら 120→80）
-  // moveEnergy を沈みに変換（反応良くしたいなら係数上げる/強いなら下げる）
-  const moveSink = Math.min(260, moveEnergy) * 0.9;
+  // 押してる＋なぞりで沈む（控えめに）
+  const baseSink = down ? 90 : 0;
+  const moveSink = Math.min(300, moveEnergy) * 0.55;
 
-
-  // 目標沈み量
   targetOffset = baseSink + moveSink;
 
-  // 追従（滑らか）
-  const follow = 0.11;
+  // 追従（反応を気持ちよく）
+  const follow = 0.12;
   offsetY += (targetOffset - offsetY) * follow;
 
-  // なぞり勢いは自然に減衰
-  moveEnergy *= 0.92;
+  moveEnergy *= 0.90;
 
-  // 描画（全体を少し沈ませる）
   ctx.clearRect(0,0,w,h);
+
   ctx.save();
-  ctx.translate(0, offsetY * 0.35); // ←沈みの見え方（強いなら 0.35→0.25）
+  ctx.translate(0, offsetY * 0.30); // 沈み演出
   drawBackground();
   drawMist();
   ctx.restore();
